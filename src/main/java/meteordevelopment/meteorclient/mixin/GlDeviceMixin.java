@@ -6,12 +6,13 @@
 package meteordevelopment.meteorclient.mixin;
 
 import com.mojang.blaze3d.opengl.GlDevice;
+import com.mojang.blaze3d.vulkan.VulkanDevice;
 import com.mojang.blaze3d.systems.RenderPassBackend;
 import meteordevelopment.meteorclient.mixininterface.IGpuDevice;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
-@Mixin(GlDevice.class)
+@Mixin({GlDevice.class, VulkanDevice.class})
 public abstract class GlDeviceMixin implements IGpuDevice {
     @Unique
     private int x, y, width, height;
