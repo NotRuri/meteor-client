@@ -88,7 +88,8 @@ public class Excavator extends Module {
     @Override
     public void onDeactivate() {
         baritone.getSelectionManager().removeSelection(baritone.getSelectionManager().getLastSelection());
-        if (baritone.getBuilderProcess().isActive()) baritone.getCommandManager().execute("stop");
+        // TODO: Baritone Tuple workaround stub
+        // if (baritone.getBuilderProcess().isActive()) baritone.getCommandManager().execute("stop");
         status = Status.SEL_START;
     }
 
