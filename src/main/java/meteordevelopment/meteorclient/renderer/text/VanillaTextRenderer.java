@@ -6,22 +6,29 @@
 package meteordevelopment.meteorclient.renderer.text;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import net.minecraft.client.gui.Font.DisplayMode;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.gui.Font.GlyphVisitor;
+import net.minecraft.client.gui.font.TextRenderable;
+import net.minecraft.client.renderer.StagedVertexBuffer;
+import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.util.LightCoordsUtil;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fStack;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public class VanillaTextRenderer implements TextRenderer {
     public static final VanillaTextRenderer INSTANCE = new VanillaTextRenderer();
 
-    private final ByteBufferBuilder buffer = new ByteBufferBuilder(2048);
-    private final MultiBufferSource.BufferSource immediate = MultiBufferSource.immediate(buffer);
+    private final StagedVertexBuffer stagedBuffer = new StagedVertexBuffer(() -> "VanillaTextRenderer", 2048);
+    private final Map<RenderType, StagedVertexBuffer.Draw> currentDraws = new LinkedHashMap<>();
+    private final Map<RenderType, VertexConsumer> currentConsumers = new LinkedHashMap<>();
 
     private final PoseStack matrices = new PoseStack();
     private final Matrix4f emptyMatrix = new Matrix4f();
@@ -58,6 +65,9 @@ public class VanillaTextRenderer implements TextRenderer {
     public void begin(double scale, boolean scaleOnly, boolean big) {
         if (building) throw new RuntimeException("VanillaTextRenderer.begin() called twice");
 
+        currentDraws.clear();
+        currentConsumers.clear();
+
         this.scale = scale * 2;
         this.building = true;
     }
@@ -80,7 +90,25 @@ public class VanillaTextRenderer implements TextRenderer {
             matrix = matrices.last().pose();
         }
 
-        mc.font.drawInBatch(text, (float) (x / scale), (float) (y / scale), color.getPacked(), shadow, matrix, immediate, DisplayMode.NORMAL, 0, LightCoordsUtil.FULL_BRIGHT);
+        float finalX = (float) (x / scale);
+        float finalY = (float) (y / scale);
+        int finalColor = color.getPacked();
+        Matrix4f finalMatrix = matrix;
+
+        mc.font.prepareText(text, finalX, finalY, finalColor, shadow, LightCoordsUtil.FULL_BRIGHT)
+            .visit(new GlyphVisitor() {
+                @Override
+                public void acceptRenderable(TextRenderable renderable) {
+                    RenderType type = renderable.renderType(DisplayMode.NORMAL);
+                    VertexConsumer consumer = currentConsumers.computeIfAbsent(type, t -> {
+                        StagedVertexBuffer.Draw draw = stagedBuffer.appendDraw(t.format(), t.primitiveTopology());
+                        currentDraws.put(t, draw);
+                        return stagedBuffer.getVertexBuilder(draw);
+                    });
+                    renderable.render(finalMatrix, consumer, LightCoordsUtil.FULL_BRIGHT, shadow);
+                }
+            });
+
         double x2 = (x / scale) + mc.font.width(text);
 
         if (scaleIndividually) matrices.popPose();
@@ -105,7 +133,18 @@ public class VanillaTextRenderer implements TextRenderer {
         matrixStack.pushMatrix();
         if (!scaleIndividually) matrixStack.scale((float) scale, (float) scale, 1);
 
-        immediate.endBatch();
+        stagedBuffer.upload();
+        for (Map.Entry<RenderType, StagedVertexBuffer.Draw> entry : currentDraws.entrySet()) {
+            RenderType type = entry.getKey();
+            StagedVertexBuffer.Draw draw = entry.getValue();
+            StagedVertexBuffer.ExecuteInfo executeInfo = stagedBuffer.getExecuteInfo(draw);
+            if (executeInfo != null) {
+                type.prepare().drawFromBuffer(executeInfo);
+            }
+        }
+        stagedBuffer.endDraw();
+        currentDraws.clear();
+        currentConsumers.clear();
 
         matrixStack.popMatrix();
 
