@@ -73,7 +73,6 @@ public class Zoom extends Module {
     private boolean preCinematic;
     private double preMouseSensitivity;
     private double value;
-    private double lastFov;
     private double time;
 
     private boolean hudManualToggled;
@@ -89,7 +88,6 @@ public class Zoom extends Module {
             preCinematic = mc.options.smoothCamera;
             preMouseSensitivity = mc.options.sensitivity().get();
             value = zoom.get();
-            lastFov = mc.options.fov().get();
             time = 0.001;
 
             MeteorClient.EVENT_BUS.subscribe(this);
@@ -118,8 +116,6 @@ public class Zoom extends Module {
     public void onStop() {
         mc.options.smoothCamera = preCinematic;
         mc.options.sensitivity().set(preMouseSensitivity);
-
-        mc.levelExtractor.allChanged();
     }
 
     @EventHandler
@@ -166,11 +162,6 @@ public class Zoom extends Module {
     @EventHandler
     private void onGetFov(GetFovEvent event) {
         event.fov /= (float) getScaling();
-
-        if (lastFov != event.fov) {
-            mc.levelExtractor.allChanged();
-        }
-        lastFov = event.fov;
     }
 
     public double getScaling() {
