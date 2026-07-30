@@ -12,6 +12,7 @@ base {
 }
 
 repositories {
+    mavenLocal()
     maven {
         name = "meteor-maven"
         url = uri("https://maven.meteordev.org/releases")
