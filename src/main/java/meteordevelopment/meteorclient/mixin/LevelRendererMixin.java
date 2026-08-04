@@ -9,7 +9,8 @@ import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
-import com.mojang.blaze3d.resource.ResourceHandle;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.PoseStack;
 import it.unimi.dsi.fastutil.Stack;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -25,7 +26,6 @@ import meteordevelopment.meteorclient.utils.render.postprocess.EntityShader;
 import meteordevelopment.meteorclient.utils.render.postprocess.PostProcessShaders;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.LevelTargetBundle;
 import net.minecraft.client.renderer.RenderBuffers;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
@@ -144,14 +144,6 @@ public abstract class LevelRendererMixin implements ILevelRenderer {
 
     // ILevelRenderer
 
-    // FIXME(26.2): this is effectively @Final, yet we change it later, causing a crash in ESP Shader mode.
-    @Shadow
-    private RenderTarget entityOutlineTarget;
-
-    @Shadow
-    @Final
-    private LevelTargetBundle targets;
-
     @Shadow
     @Final
     private EntityRenderDispatcher entityRenderDispatcher;
@@ -159,29 +151,28 @@ public abstract class LevelRendererMixin implements ILevelRenderer {
     @Final
     private RenderBuffers renderBuffers;
     @Unique
-    private Stack<RenderTarget> framebufferStack;
-
+    private Stack<GpuTextureView> colorTextureStack;
     @Unique
-    private Stack<ResourceHandle<RenderTarget>> framebufferHandleStack;
+    private Stack<GpuTextureView> depthTextureStack;
 
     @Inject(method = "<init>", at = @At("TAIL"))
     private void init$IWorldRenderer(CallbackInfo ci) {
-        framebufferStack = new ObjectArrayList<>();
-        framebufferHandleStack = new ObjectArrayList<>();
+        colorTextureStack = new ObjectArrayList<>();
+        depthTextureStack = new ObjectArrayList<>();
     }
 
     @Override
     public void meteor$pushEntityOutlineFramebuffer(RenderTarget framebuffer) {
-        framebufferStack.push(this.entityOutlineTarget);
-        this.entityOutlineTarget = framebuffer;
+        colorTextureStack.push(RenderSystem.outputColorTextureOverride);
+        depthTextureStack.push(RenderSystem.outputDepthTextureOverride);
 
-        framebufferHandleStack.push(this.targets.entityOutline);
-        this.targets.entityOutline = () -> framebuffer;
+        RenderSystem.outputColorTextureOverride = framebuffer.getColorTextureView();
+        RenderSystem.outputDepthTextureOverride = framebuffer.getDepthTextureView();
     }
 
     @Override
     public void meteor$popEntityOutlineFramebuffer() {
-        this.entityOutlineTarget = framebufferStack.pop();
-        this.targets.entityOutline = framebufferHandleStack.pop();
+        RenderSystem.outputColorTextureOverride = colorTextureStack.pop();
+        RenderSystem.outputDepthTextureOverride = depthTextureStack.pop();
     }
 }
